@@ -1,0 +1,528 @@
+---
+title: "Trabajo Práctico Final de Laboratorio de Datos"
+author: "Delfina Comerso, Valentina Durán y Luz Montserrat"
+date: "2022-11-15"
+output: html_document
+---
+### Breve introducción del dataset
+
+El dataset que utilizamos lo obtuvimos de una página llamada OPEN ML. La información se recopiló de los participantes de un experimento llamado "speed dating" que tuvo lugar del 2002-2004. Durante este experimento, los participantes tenían 4 minutos para tener una "primera cita" con todos los participantes del sexo opuesto. Al final de los 4 minutos, se le preguntó a los participantes si querían tener otra cita con la pareja que les había tocado. Además, se les pidió que ranqueen a su cita dependiendo de 6 atributos: atractivo, sinceridad, inteligencia, humor, ambición e intereses comunes. El dataset también incluye otras variables como la edad, el género, si al participante le importa la religión o la ascendencia de la pareja y percepciones del participante de cuántos match piensa que va a tener. Por último, se ve la decision del participante y su pareja y si hicieron match o no.
+
+### Carga de datos
+Primero que nada carguemos los datos:
+```{r}
+datos <- read.csv("/home/clinux01/Descargas/citas.csv", stringsAsFactors = FALSE)
+```
+
+### Filtración de datos de interés
+Nos quedamos con las variables que nos interesan y sacamos los datos vacíos para que el análisis sea más simple.
+```{r}
+library(dplyr)
+datos1 <- datos %>%
+            dplyr::select(id = iid, id_p = pid, genero = gender, edad = age, edad_p = age_o, asc = race, asc_p = race_o, importa_misma_asc = importance_same_race, importa_misma_religion = importance_same_religion,
+                          #lo que dijo la otra persona de mi:
+                          atractivo_rate = attractive_o, sinceridad_rate = sinsere_o, inteligencia_rate = intelligence_o, humor_rate = funny_o, ambicion_rate = ambitous_o, intereses_en_comun_rate = shared_interests_o,
+                          #que prefiero yo:
+                          atractivo = attractive_important, sinceridad = sincere_important, inteligencia = intellicence_important, humor = funny_important, ambicion = ambtition_important, intereses_en_comun = shared_interests_important,
+                          #lo que pienso de mi pareja:
+                          atractivo_de_p = attractive_partner, sinceridad_de_p = sincere_partner, inteligencia_de_p = intelligence_partner, humor_de_p = funny_partner, ambicion_de_p = ambition_partner, intereses_en_comun_de_p = shared_interests_partner, 
+                          #otras preguntas
+                          cuantos_match_tendre = expected_num_matches,
+                          me_gusto_mi_p = like,
+                          probabilidad_de_gustar = guess_prob_liked,
+                          decision = decision,
+                          decision_p = decision_o,
+                          match = match
+                          )
+
+datos1 <- na.omit(datos1)
+library(ggplot2)
+install.packages("patchwork")
+library(patchwork)
+require(class)
+```
+
+Cambiamos las variables que son character y deberían ser numéricas para que podemos trabajar con ellas con más facilidad. Luego, volvemos a sacar los datos vacíos para no tener NAs.
+```{r, warning=FALSE}
+datos1$match<-as.numeric(datos1$match)
+datos1$atractivo_rate<-as.numeric(datos1$atractivo_rate)
+datos1$atractivo_de_p<-as.numeric(datos1$atractivo_de_p)
+datos1$atractivo<-as.numeric(datos1$atractivo)
+
+datos1$sinceridad_rate<-as.numeric(datos1$sinceridad_rate)
+datos1$sinceridad_de_p<-as.numeric(datos1$sinceridad_de_p)
+datos1$sinceridad<-as.numeric(datos1$sinceridad)
+
+datos1$inteligencia_rate<-as.numeric(datos1$inteligencia_rate)
+datos1$inteligencia_de_p<-as.numeric(datos1$inteligencia_de_p)
+datos1$inteligencia<-as.numeric(datos1$inteligencia)
+
+datos1$humor_rate<-as.numeric(datos1$humor_rate)
+datos1$humor_de_p<-as.numeric(datos1$humor_de_p)
+datos1$humor<-as.numeric(datos1$humor)
+
+datos1$ambicion_rate<-as.numeric(datos1$ambicion_rate)
+datos1$ambicion_de_p<-as.numeric(datos1$ambicion_de_p)
+datos1$ambicion<-as.numeric(datos1$ambicion)
+
+datos1$me_gusto_mi_p<-as.numeric(datos1$me_gusto_mi_p)
+
+datos1$atractivo = datos1$atractivo/10
+datos1$sinceridad = datos1$sinceridad/10
+datos1$humor = datos1$humor/10
+datos1$ambicion = datos1$ambicion/10
+datos1$inteligencia = datos1$inteligencia/10
+datos1$intereses_en_comun = datos1$intereses_en_comun/10
+
+datos1 <- na.omit(datos1)
+```
+
+Como nuestro dataset tiene datos repetidos porque cada persona tuvo varias citas, por ejemplo el genero de un participante aparece varias veces, entonces nos armamos un subdataset con únicamente una aparición de cada participante. Esto es por si queremos trabajar con los datos personales de cada persona, sin tener repetidos.
+```{r}
+datos0 <- datos1 %>% group_by(id) %>% filter(row_number()==1)
+```
+
+# Analisis exploratorio de los datos
+### Conozcamos a nuestros participantes
+
+Para este análisis usamos datos0 porque queremos ver los datos personales de cada participante.
+
+#### Rango de edades
+Veamos primero el rango de edades de las personas que realizaron las citas:
+```{r}
+range(unique(datos0$edad))
+```
+Vemos que la persona de menor edad que participó fue de 18 años y la de mayor de 55 años.
+
+Veamos en un gráfico de barras este rango para ver la variedad de edades
+```{r}
+datos0 %>%
+  ggplot(aes(x=edad))+
+  xlab("Edad")+
+  ylab("Cantidad")+
+  geom_bar(fill = "mistyrose1", col = "lightpink3")+
+  theme_minimal()
+```
+
+Observamos que hay una gran variabilidad de las edades de las personas que tomaron el test.
+Veamos cual es el promedio:
+```{r}
+mean(datos0$edad)
+```
+Vemos que el promedio es aproximadamente 26 años.
+
+#### Ascendencia de los participantes
+
+Veamos cuales son las ascendencias de los distintos participantes:
+```{r}
+unique(datos0$asc)
+```
+
+Vemos que hay 4 tipos de ascendencias y una que es "other" que abarca distintos tipos de ascendencias que no son tan comunes como las otras.
+
+Veamos entonces cuál es la ascendencia con más participantes diferenciando por su género.
+```{r}
+datos0 %>% 
+  ggplot(aes(x=asc,fill=genero))+
+  geom_bar()+
+  xlab("Ascendencia")+
+  ylab("Cantidad de participantes")+
+  scale_x_discrete(guide = guide_axis(angle = 45))+
+  scale_colour_manual(values = c("rosybrown1", "rosybrown3"), aesthetics = "fill")+
+  theme_minimal()+
+  theme(axis.text = element_text(size = 8))
+```
+
+Vemos que las ascendencias que mayor participantes tienen son la europea(caucásica) y la asiática. Por otro lado, las que menos tienen son la afroamericana y latina, junto con las otras.
+
+Veamos ahora la importancia de la ascendencia y la religión en las personas que tomaron el test:
+```{r}
+p1 <- datos0 %>%
+  ggplot(aes(x=importa_misma_asc))+
+  xlab("Importancia de la ascendencia")+
+  ylab("Cantidad de personas")+
+  geom_bar(fill = "mistyrose1", col = "lightpink3")+
+  theme_minimal()
+
+p2 <- datos0 %>%
+  ggplot(aes(x=importa_misma_religion))+
+  xlab("Importancia de la religión")+
+  ylab("Cantidad de personas")+
+  geom_bar(fill = "mistyrose1", col = "lightpink3")+
+  theme_minimal()
+
+p1+p2
+```
+
+Podemos observar que a la mayoría de las personas no les importa la religión ni la ascendencia de su pareja. Además vemos un decrecimiento en la importancia de ambas variables. 
+
+### Match
+
+Veamos los distintos tipos de decisiones de los participantes. La forma de hacer match es que ambos decidan que se quieren volver a ver, es decir que ambas decisiones sean = 1. Pero además de esto, tenemos los casos donde los dos dijeron que no, o que uno dijo que si y el otro que no.
+Veamos la cantidad de matchs en total sobre 4959 citas.
+```{r}
+sum(datos1$match[]==1)
+```
+
+La cantidad de matchs debería ser igual a la suma de casos en donde ambos participantes decidieron que querían tener otra cita, veamos si se cumple:
+```{r}
+sum(datos1$decision==1 & datos1$decision_p==1)
+```
+Vemos que es la misma, con lo cual, los datos son correctos.
+
+Veamos la cantidad de casos en los que un participante dijo que si y otro que no:
+```{r}
+sum(datos1$decision==0 & datos1$decision_p==1)+sum(datos1$decision==1 & datos1$decision_p==0)
+```
+
+Ahora los que los dos dijeron que no:
+```{r}
+sum(datos1$decision==0 & datos1$decision_p==0)
+```
+
+La suma de estos 3 casos debería dar el total de los datos
+```{r}
+839+2587+1533
+nrow(datos1)
+```
+Es el total de los datos! 
+
+Veamos los porcentajes:
+```{r}
+sum(datos1$match==1)/nrow(datos1)*100
+sum(datos1$decision==1& datos1$decision_p==0|datos1$decision==0& datos1$decision_p==1)/nrow(datos1)*100
+sum(datos1$decision==0& datos1$decision_p==0)/nrow(datos1)*100
+```
+El 17% de las parejas tuvo match, el 52% uno dijo que si y el otro que no, y un 31% dijeron que no ambos.
+
+Grafiquemos esto:
+```{r}
+p<-c(sum(datos1$match==1)/nrow(datos1)*100,sum(datos1$decision==1& datos1$decision_p==0|datos1$decision==0& datos1$decision_p==1)/nrow(datos1)*100,sum(datos1$decision==0& datos1$decision_p==0)/nrow(datos1)*100)
+pie(p,labels = c("Ambos dijeron si","Uno dijo si y el otro no","Ambos dijeron que no"))
+```
+
+¿Tiene que ver las ascendencia propia en la preferencia al momento de elegir pareja?
+```{r}
+datos1 %>%
+  ggplot(aes(x=asc, y= importa_misma_asc))+
+  xlab("Ascendencia")+
+  ylab("Importancia de la ascendencia")+
+  geom_boxplot(fill = "mistyrose1", col = "lightpink3")+
+  scale_x_discrete(guide = guide_axis(angle = 45))+
+  theme_minimal()+
+  theme(axis.text = element_text(size = 8))
+```
+
+Podemos observar que la mediana de la ascendencia europea es más alta que la mediana de las demás ascendencias, que son todas muy parecidas. Podemos pensar que esto se debe a que esta ascendencia es la que más participantes tiene, pero además, que a este tipo de participantes le importa más la ascendencia de su pareja.
+
+# Predición de Match
+
+En esta sección buscamos clasificar si hubo match o no dependiendo distintos aspectos y determinar las mejores variables para clasificar el match. Vamos a utilizar el tipo de clasificación por k vecinos más cercanos. Haciendo particiones 80 %-20 % del dataset calculamos el número óptimo de vecinos para maximizar el accuracy de la predicción. 
+
+#### Primera clasificación: Inteligencia, Atractivo y Humor
+
+Primero que nada clasificamos si va a haber match o no dependiendo de que tan atractivo, tan inteligente y cuánto humor tiene el participante según su pareja y lo mismo con la pareja según el participante.
+```{r}
+valores.k = seq(1, 31, 2) #del 1 al 21 d dos en dos agarrando impares
+accuracy_k <- rep(NA, length(valores.k)) 
+j = 1  
+
+for(k in valores.k){
+  accuracy <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain <- round(N*0.8) #entrenamiento
+  iTrain <- sample(1:N, Ntrain, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train <- datos1[iTrain,] #entrenamiento
+  data.test <- datos1[-iTrain,] #test
+  
+  prediccion <- knn(data.train[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p")],data.test[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p")], data.train[,"match"], k)
+    accuracy[i] <- mean(data.test$match == prediccion) 
+  }
+  accuracy_k[j] <- mean(accuracy)
+  j = j+1
+}
+ k_optimo <- valores.k[which.max(accuracy_k)] #es el k tal que el accuracy es máximo
+```
+
+Veamos los accuracies de cada K y cual es el más grande.
+```{r}
+datosK <- data.frame(accuracy = accuracy_k, vecinos = valores.k, metodo = "por separado")
+datosK1 <- data.frame(accuracy = accuracy_k, vecinos = valores.k, clasificacion = "Inteligencia, Atractivo y Humor")
+
+ggplot(datosK, aes(y=accuracy,x=vecinos, col = METODO))+
+  geom_line(col = "palevioletred1") + 
+  geom_point(col = "violetred4")+
+   labs(y="Acurracy", x = "Iteración") +
+  theme_minimal()
+```
+
+Veamos si concuerda con el gráfico:
+```{r}
+print(k_optimo)
+```
+Si!
+
+Hagamos una predicción con el 20% con el K óptimo para luego ver los porcentajes de aciertos en un gráfico.
+```{r}
+N <- nrow(datos1)
+  Ntrain <- round(N*0.8) #entrenamiento
+  iTrain <- sample(1:N, Ntrain, replace = FALSE) 
+#Separamos los datos train de los datos test
+  data.train <- datos1[iTrain,] #entrenamiento
+  data.test <- datos1[-iTrain,] #test
+prediccionKOptimo <- knn(data.train[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p")],data.test[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p")], data.train[,"match"], k_optimo)
+aciertosK <- data.test$match == prediccionKOptimo
+```
+
+Para graficarlo lo metemos en un dataset.
+```{r}
+datosAciertos <- data.frame(aciertos = aciertosK)
+
+ggplot(datosAciertos, aes(x = aciertos, fill = aciertos)) +
+  geom_bar()+
+  xlab("Aciertos con el K Optimo")+
+  ylab("Cantidad")+
+  scale_colour_manual(values = c("rosybrown3", "rosybrown1"), aesthetics = "fill")+
+  geom_text(x=TRUE, y=400, label="83,77%",size=7.0)+
+  geom_text(x=FALSE, y=78, label="16,23%",size=7.0)
+```
+
+Vemos que nos da casi un 84% de aciertos !!!!!!!!!!!!NO SIEMPRE ES IGUAL
+
+#### Segunda clasificación: Diferencias entre Inteligencia, Atractivo y Humor
+
+Veamos las diferencias entre lo que el participante rateo de su pareja y viceversa.
+```{r}
+difAtractivo <- abs(datos1$atractivo_rate - datos1$atractivo_de_p)
+difHumor <- abs(datos1$humor_rate - datos1$humor_de_p)
+difInteligencia <- abs(datos1$inteligencia_rate - datos1$inteligencia_de_p)
+
+datos1 <- datos1 %>% mutate(difAtractivo = difAtractivo, difHumor = difHumor, difInteligencia = difInteligencia)
+
+datos1 <- na.omit(datos1)
+```
+
+Veamos el modelo basado en lo anterior
+```{r}
+valores.k2 = seq(1, 31, 2)
+accuracy_k2 <- rep(NA, length(valores.k2)) 
+j = 1  
+
+for(k in valores.k2){
+  accuracy2 <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain2 <- round(N*0.8) #entrenamiento
+  iTrain2 <- sample(1:N, Ntrain2, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train2 <- datos1[iTrain2,] #entrenamiento
+  data.test2 <- datos1[-iTrain2,] #test
+  
+  prediccion2 <- knn(data.train2[,c("difAtractivo", "difHumor", "difInteligencia")],data.test2[,c("difAtractivo", "difHumor", "difInteligencia")], data.train2[,"match"], k)
+    accuracy2[i] <- mean(data.test2$match == prediccion2) 
+  }
+
+  accuracy_k2[j] <- mean(accuracy2)
+  j = j+1
+}
+
+ k_optimo2 <- valores.k2[which.max(accuracy_k2)] #es el k tal que el accuracy es máximo
+```
+
+Graficamos los diferentes k vecinos y su accuracy con este nuevo modelo.
+```{r}
+datosK2 <- data.frame(accuracy = accuracy_k2, vecinos = valores.k2, metodo = "diferencia")
+
+ggplot(datosK2, aes(y=accuracy,x=vecinos))+
+  geom_line(col = "palevioletred1") + 
+  geom_point(col = "violetred4")+
+   labs(y="Acurracy", x = "Iteración") +
+  ylim(0.8, 0.85)+
+  theme_minimal()
+```
+
+ Grafiquemos ambas lineas juntas para ver la diferencia de accuracy entre ambas.
+```{r}
+datosNuevo <- rbind(datosK, datosK2)
+
+ggplot(datosNuevo, aes(y=accuracy,x=vecinos, col = metodo))+
+  geom_point()+
+  geom_line() + 
+  labs(y="Acurracy", x = "Iteración") +
+  theme_minimal()
+
+```
+ 
+ 
+Vemos que es mejor trabajar con las variables por separado más que calculando la diferencia entre ambas ya que la linea azul está más alta que la naranja. Esto lo podríamos atribuir al hecho de que al hacer la diferencia, el método no hace diferencia entre si alguien votó 2 y su pareja 1, lo que daría una diferencia de 1, y si alguien votó 9 y su pareja 8, lo que también da lo mismo. Tiene sentido que el primer método funcione mejor ya que es más probable que haya match entre el 9 y el 8 que entre 1 y 2.
+ 
+Hagamos entonces más clasificaciones con el primer método.
+ 
+#### Tercera clasificación: Ascendencia
+ 
+Veamos si al tener la misma ascendencia hay match o no. Para esto agregamos una columna al dataset que nos dice TRUE si el participante y su pareja tienen la misma ascendencia y FALSE en el caso contrario.
+```{r}
+misma_asc <- (datos1$asc == datos1$asc_p)
+datos1 <- mutate(datos1, misma_asc = as.numeric(misma_asc))
+
+valores.k3 = seq(1, 31, 2)
+accuracy_k3 <- rep(NA, length(valores.k3)) 
+j = 1  
+
+for(k in valores.k3){
+  accuracy3 <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain3 <- round(N*0.8) #entrenamiento
+  iTrain3 <- sample(1:N, Ntrain3, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train3 <- datos1[iTrain3,] #entrenamiento
+  data.test3 <- datos1[-iTrain3,] #test
+  
+  prediccion3 <- knn(data.train3[,c("misma_asc", "importa_misma_asc")],data.test3[,c("misma_asc", "importa_misma_asc")], data.train3[,"match"], k)
+    accuracy3[i] <- mean(data.test3$match == prediccion3) 
+  }
+
+  accuracy_k3[j] <- mean(accuracy3)
+  j = j+1
+}
+
+ k_optimo3 <- valores.k3[which.max(accuracy_k3)]
+```
+
+```{r}
+datosK3 <- data.frame(accuracy = accuracy_k3, vecinos = valores.k3, clasificacion = "Ascendencia")
+```
+
+#### Cuarta clasificación: Edad
+ 
+Veamos si las edades sirven para ver si hay match o no. 
+```{r}
+valores.k4 = seq(1, 31, 2)
+accuracy_k4 <- rep(NA, length(valores.k4)) 
+j = 1  
+
+for(k in valores.k4){
+  accuracy4 <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain4 <- round(N*0.8) #entrenamiento
+  iTrain4 <- sample(1:N, Ntrain4, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train4 <- datos1[iTrain4,] #entrenamiento
+  data.test4 <- datos1[-iTrain4,] #test
+  
+  prediccion4 <- knn(data.train4[,c("edad", "edad_p")],data.test4[,c("edad", "edad_p")], data.train4[,"match"], k)
+    accuracy4[i] <- mean(data.test4$match == prediccion4) 
+  }
+
+  accuracy_k4[j] <- mean(accuracy4)
+  j = j+1
+}
+
+ k_optimo4 <- valores.k4[which.max(accuracy_k4)]
+```
+ 
+```{r}
+datosK4 <- data.frame(accuracy = accuracy_k4, vecinos = valores.k4, clasificacion = "Edad")
+
+```
+ 
+#### Quinta clasificación: Ambición e intereses en común
+ 
+Veamos si al tener ambición e intereses en común similares hay match o no. 
+```{r}
+valores.k5 = seq(1, 31, 2)
+accuracy_k5 <- rep(NA, length(valores.k5)) 
+j = 1  
+
+for(k in valores.k5){
+  accuracy5 <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain5 <- round(N*0.8) #entrenamiento
+  iTrain5 <- sample(1:N, Ntrain5, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train5 <- datos1[iTrain5,] #entrenamiento
+  data.test5 <- datos1[-iTrain5,] #test
+  
+  prediccion5 <- knn(data.train5[,c("intereses_en_comun", "intereses_en_comun_de_p", "ambicion", "ambicion_de_p")],data.test5[,c("intereses_en_comun", "intereses_en_comun_de_p", "ambicion", "ambicion_de_p")], data.train5[,"match"], k)
+    accuracy5[i] <- mean(data.test5$match == prediccion5) 
+  }
+
+  accuracy_k5[j] <- mean(accuracy5)
+  j = j+1
+}
+
+ k_optimo5 <- valores.k5[which.max(accuracy_k5)]
+```
+ 
+```{r}
+datosK5 <- data.frame(accuracy = accuracy_k5, vecinos = valores.k5, clasificacion = "Intereses en comun y ambicion")
+```
+
+#### Sexta clasificación: Todas las variables utilizadas previamente
+ 
+Veamos si al usar todas las variables, el modelo predice mejor si hay match o no. 
+```{r}
+valores.k6 = seq(1, 31, 2)
+accuracy_k6 <- rep(NA, length(valores.k6)) 
+j = 1  
+
+for(k in valores.k6){
+  accuracy6 <- 1:10
+  for(i in 1:50){
+  N <- nrow(datos1)
+  Ntrain6 <- round(N*0.8) #entrenamiento
+  iTrain6 <- sample(1:N, Ntrain6, replace = FALSE) 
+  
+#Separamos los datos train de los datos test
+  data.train6 <- datos1[iTrain6,] #entrenamiento
+  data.test6 <- datos1[-iTrain6,] #test
+  
+  prediccion6 <- knn(
+                    data.train6[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p", "intereses_en_comun", "intereses_en_comun_de_p", "ambicion", "ambicion_de_p", "misma_asc", "importa_misma_asc", "edad", "edad_p")],
+                     data.test6[,c("atractivo_rate", "humor_rate", "inteligencia_rate", "atractivo_de_p", "humor_de_p", "inteligencia_de_p", "intereses_en_comun", "intereses_en_comun_de_p", "ambicion", "ambicion_de_p", "misma_asc", "importa_misma_asc", "edad", "edad_p")], data.train6[,"match"], k)
+    accuracy6[i] <- mean(data.test6$match == prediccion6) 
+  }
+
+  accuracy_k6[j] <- mean(accuracy6)
+  j = j+1
+}
+
+ k_optimo6 <- valores.k6[which.max(accuracy_k6)]
+```
+ 
+```{r}
+datosK6 <- data.frame(accuracy = accuracy_k6, vecinos = valores.k6, clasificacion = "TODOS")
+```
+
+Veamos todas las clasificaciones en un mismo gráfico para ver cuál predice mejor según los distintos k vecinos.
+```{r}
+datosNuevo2 <- rbind(datosK1, datosK3, datosK4, datosK5, datosK6)
+
+ggplot(datosNuevo2, aes(y=accuracy,x=vecinos, col = clasificacion))+
+  geom_point()+
+  geom_line() + 
+  labs(y="Acurracy", x = "K vecinos") +
+  theme_minimal()
+```
+
+Vemos que la mejor clasificación esta hecha con las variables Inteligencia, Atractivo y Humor. Esto nos dice que estos atributos personales son los que más les importan a nuestros participantes a la hora de elegir pareja. Por otro lado, vemos que los intereses en común y la ambición es lo menos importante. Ademas, podemos observar que con la edad y la ascendencia no varía notablemente la predicción según que k elijas. Sin embargo, con las otras variables vemos que con los primeros k la predicción es un poco peor.
+
+# Conclusión
+
+Podemos concluir que el modelo que mejor clasifica es el de la Inteligencia, el Humor y Atractivo, y esto se puede deber a que estos atributos abarcan aspectos tanto físicos como de la personalidad, que es lo que probablemente le queda a una persona después de conocer a otra por tan sólo 4 minutos. En cambio, los intereses en común y la ambición son atributos que quizás no pueden ser discutidos en un período tan corto de tiempo. Posiblemente, si las citas hubieran sido más largas y/o con menos combinatorias entre participantes, los atributos que más afectarían a la hora de hacer match seguramente serían otros.
+
+# Agradecimientos
+
+Queremos agradecer a los profes por tan buena cursada. Aprendimos muchas cosas nuevas y estamos muy agradecidas!
+
+
